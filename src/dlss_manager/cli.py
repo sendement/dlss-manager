@@ -209,6 +209,14 @@ def cmd_optiscaler_install(args, m: Manager) -> None:
     print(f"Installed {source.label} {release.tag} -> {result.target_dir} as {result.proxy_filename}")
     if result.conflict_backup_path:
         print(f"(existing {result.proxy_filename} backed up to {result.conflict_backup_path})")
+    if sys.platform.startswith("linux"):
+        from .optiscaler import wine_dll_override_hint
+
+        print(
+            "\nLinux/Proton: to make sure Wine uses this file and not its own builtin one,\n"
+            f"add this to the game's Steam launch options:\n"
+            f"  {wine_dll_override_hint(result.proxy_filename)}"
+        )
 
 
 def cmd_optiscaler_list(args, m: Manager) -> None:

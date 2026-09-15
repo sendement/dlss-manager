@@ -376,3 +376,11 @@ def uninstall_from(target_dir: Path, installed_files: list[str], conflict_backup
         if backup.is_file():
             proxy_name = backup.name.split("__", 1)[1]
             shutil.copy2(backup, target_dir / proxy_name)
+
+
+def wine_dll_override_hint(proxy_filename: str) -> str:
+    """The upstream setup scripts' own advice for Linux/Proton/Wine users:
+    without this, Wine may keep using its builtin DLL of the same name
+    instead of the one we just dropped into the game folder. Goes into the
+    game's Steam launch options."""
+    return f"WINEDLLOVERRIDES={proxy_filename}=n,b %COMMAND%"

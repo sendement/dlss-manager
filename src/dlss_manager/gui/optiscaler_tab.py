@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -22,7 +23,14 @@ from PySide6.QtWidgets import (
 )
 
 from ..manager import Manager
-from ..optiscaler import DEFAULT_PROXY_DLL, PROXY_DLL_CHOICES, SOURCES, ExtractionError, OptiScalerError
+from ..optiscaler import (
+    DEFAULT_PROXY_DLL,
+    PROXY_DLL_CHOICES,
+    SOURCES,
+    ExtractionError,
+    OptiScalerError,
+    wine_dll_override_hint,
+)
 
 LATEST_LABEL = "Последняя"
 
@@ -303,6 +311,23 @@ class OptiScalerTab(QWidget):
 
         self.set_status(f"{source.label if source else source_key} {release.tag} установлен в {result.target_dir}")
         self.refresh()
+        if sys.platform.startswith("linux"):
+            self._show_launch_option_hint(result.proxy_filename)
+
+    def _show_launch_option_hint(self, proxy_filename: str) -> None:
+        override = wine_dll_override_hint(proxy_filename)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Information)
+        box.setWindowTitle("Linux/Proton: параметр запуска")
+        box.setText(
+            "Чтобы Proton точно использовал файл OptiScaler, а не свой встроенный "
+            f"{proxy_filename}, добавь в свойствах игры в Steam -> Launch Options:"
+        )
+        box.setInformativeText(override)
+        copy_btn = box.addButton("Копировать", QMessageBox.ActionRole)
+        box.addButton("Закрыть", QMessageBox.AcceptRole)
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(override))
+        box.exec()
 
     def _on_update(self, install_id: int) -> None:
         QApplication.setOverrideCursor(Qt.WaitCursor)
