@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..manager import Manager
-from ..optiscaler import PROXY_DLL_CHOICES, DEFAULT_PROXY_DLL, ExtractionError, OptiScalerError
+from ..optiscaler import DEFAULT_PROXY_DLL, PROXY_DLL_CHOICES, SOURCES, ExtractionError, OptiScalerError
 
 LATEST_LABEL = "Последняя"
 
@@ -32,7 +32,6 @@ class OptiScalerTab(QWidget):
         super().__init__()
         self.manager = manager
         self.set_status = set_status
-        self._releases_loaded = False
 
         root = QVBoxLayout(self)
 
@@ -45,6 +44,21 @@ class OptiScalerTab(QWidget):
         self.game_combo.currentIndexChanged.connect(self._on_game_changed)
         row1.addWidget(self.game_combo, 1)
         form_layout.addLayout(row1)
+
+        row_source = QHBoxLayout()
+        row_source.addWidget(QLabel("Источник:"))
+        self.source_combo = QComboBox()
+        for s in self.manager.optiscaler_sources():
+            self.source_combo.addItem(s.label, s.key)
+        self.source_combo.currentIndexChanged.connect(self._on_source_changed)
+        row_source.addWidget(self.source_combo, 1)
+        form_layout.addLayout(row_source)
+
+        self.source_note_label = QLabel()
+        self.source_note_label.setWordWrap(True)
+        self.source_note_label.setStyleSheet("color: #b35c00;")
+        self.source_note_label.hide()
+        form_layout.addWidget(self.source_note_label)
 
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("Папка установки:"))
@@ -92,21 +106,23 @@ class OptiScalerTab(QWidget):
         self.installs_table = self._build_installs_table()
         root.addWidget(self.installs_table)
 
+        self._on_source_changed()
         self.refresh()
 
     # -- layout -----------------------------------------------------------
 
     def _build_installs_table(self) -> QTableWidget:
-        table = QTableWidget(0, 7)
-        table.setHorizontalHeaderLabels(["Игра", "Версия", "Proxy", "Папка", "Статус", "", ""])
+        table = QTableWidget(0, 8)
+        table.setHorizontalHeaderLabels(["Игра", "Источник", "Версия", "Proxy", "Папка", "Статус", "", ""])
         header = table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.Stretch)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectRows)
         table.verticalHeader().setVisible(False)
@@ -143,6 +159,20 @@ class OptiScalerTab(QWidget):
         for t in targets:
             self.target_combo.addItem(str(t))
 
+    def _current_source_key(self) -> str:
+        return self.source_combo.currentData() or "official"
+
+    def _on_source_changed(self) -> None:
+        source = SOURCES.get(self._current_source_key())
+        if source and source.note:
+            self.source_note_label.setText(f"⚠ {source.note}")
+            self.source_note_label.show()
+        else:
+            self.source_note_label.hide()
+        # Release list is source-specific; drop the stale one rather than show wrong versions.
+        self.version_combo.clear()
+        self.version_combo.addItem(LATEST_LABEL)
+
     def _refresh_installs_table(self, status_by_id: dict[int, str] | None = None) -> None:
         table = self.installs_table
         table.setRowCount(0)
@@ -151,34 +181,35 @@ class OptiScalerTab(QWidget):
         for row in self.manager.db.active_optiscaler_installs():
             r = table.rowCount()
             table.insertRow(r)
+            source = SOURCES.get(row["source_key"])
             table.setItem(r, 0, QTableWidgetItem(row["game_name"]))
-            table.setItem(r, 1, QTableWidgetItem(row["version"]))
-            table.setItem(r, 2, QTableWidgetItem(row["proxy_filename"]))
-            table.setItem(r, 3, QTableWidgetItem(row["target_dir"]))
-            table.setItem(r, 4, QTableWidgetItem(status_by_id.get(row["id"], "?")))
+            table.setItem(r, 1, QTableWidgetItem(source.label if source else row["source_key"]))
+            table.setItem(r, 2, QTableWidgetItem(row["version"]))
+            table.setItem(r, 3, QTableWidgetItem(row["proxy_filename"]))
+            table.setItem(r, 4, QTableWidgetItem(row["target_dir"]))
+            table.setItem(r, 5, QTableWidgetItem(status_by_id.get(row["id"], "?")))
 
             update_btn = QPushButton("Обновить")
             update_btn.clicked.connect(lambda _c=False, install_id=row["id"]: self._on_update(install_id))
-            table.setCellWidget(r, 5, update_btn)
+            table.setCellWidget(r, 6, update_btn)
 
             remove_btn = QPushButton("Удалить")
             remove_btn.clicked.connect(lambda _c=False, install_id=row["id"]: self._on_uninstall(install_id))
-            table.setCellWidget(r, 6, remove_btn)
+            table.setCellWidget(r, 7, remove_btn)
 
     # -- actions ------------------------------------------------------------
 
     def _on_browse(self) -> None:
-        app_id = self.game_combo.currentData()
         start_dir = self.target_combo.currentText() or str(Path.home())
         path = QFileDialog.getExistingDirectory(self, "Папка установки OptiScaler", start_dir)
         if path:
             self.target_combo.setEditText(path)
-        _ = app_id  # kept for clarity that this is scoped to the selected game
 
     def _load_releases(self) -> None:
+        source_key = self._current_source_key()
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            releases = self.manager.optiscaler_releases(limit=20)
+            releases = self.manager.optiscaler_releases(source_key=source_key, limit=20)
         except Exception as e:
             QApplication.restoreOverrideCursor()
             QMessageBox.critical(self, "Ошибка", f"Не удалось получить список релизов:\n{e}")
@@ -193,13 +224,13 @@ class OptiScalerTab(QWidget):
         idx = self.version_combo.findText(current)
         if idx >= 0:
             self.version_combo.setCurrentIndex(idx)
-        self._releases_loaded = True
 
     def _selected_release(self):
+        source_key = self._current_source_key()
         tag = self.version_combo.currentText()
         if tag == LATEST_LABEL or not tag:
-            return self.manager.latest_optiscaler_release()
-        for r in self.manager.optiscaler_releases(limit=30):
+            return self.manager.latest_optiscaler_release(source_key=source_key)
+        for r in self.manager.optiscaler_releases(source_key=source_key, limit=30):
             if r.tag == tag:
                 return r
         raise OptiScalerError(f"release {tag!r} not found")
@@ -215,13 +246,27 @@ class OptiScalerTab(QWidget):
             return
         target_dir = Path(target_text)
         proxy = self.proxy_combo.currentText()
+        source_key = self._current_source_key()
+        source = SOURCES.get(source_key)
+
+        if source and source.note:
+            if QMessageBox.warning(
+                self,
+                "Сторонний источник",
+                f"{source.label}\n\n{source.note}\n\nПродолжить установку?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            ) != QMessageBox.Yes:
+                return
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
         self.set_status("Скачивание и установка OptiScaler...")
         try:
             release = self._selected_release()
             try:
-                result = self.manager.install_optiscaler(app_id, target_dir, proxy_filename=proxy, release=release)
+                result = self.manager.install_optiscaler(
+                    app_id, target_dir, proxy_filename=proxy, release=release, source_key=source_key
+                )
             except FileExistsError:
                 QApplication.restoreOverrideCursor()
                 if QMessageBox.question(
@@ -234,7 +279,12 @@ class OptiScalerTab(QWidget):
                     return
                 QApplication.setOverrideCursor(Qt.WaitCursor)
                 result = self.manager.install_optiscaler(
-                    app_id, target_dir, proxy_filename=proxy, release=release, overwrite_conflict=True
+                    app_id,
+                    target_dir,
+                    proxy_filename=proxy,
+                    release=release,
+                    source_key=source_key,
+                    overwrite_conflict=True,
                 )
         except (OptiScalerError, ExtractionError, ValueError) as e:
             QApplication.restoreOverrideCursor()
@@ -244,20 +294,19 @@ class OptiScalerTab(QWidget):
         finally:
             QApplication.restoreOverrideCursor()
 
-        self.set_status(f"OptiScaler {release.tag} установлен в {result.target_dir}")
+        self.set_status(f"{source.label if source else source_key} {release.tag} установлен в {result.target_dir}")
         self.refresh()
 
     def _on_update(self, install_id: int) -> None:
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            release = self.manager.latest_optiscaler_release()
-            result = self.manager.update_optiscaler(install_id, release=release)
+            result = self.manager.update_optiscaler(install_id)
         except (OptiScalerError, ExtractionError, ValueError) as e:
             QApplication.restoreOverrideCursor()
             QMessageBox.critical(self, "Ошибка обновления", str(e))
             return
         QApplication.restoreOverrideCursor()
-        self.set_status(f"Обновлено до {release.tag}: {result.target_dir}")
+        self.set_status(f"Обновлено: {result.target_dir}")
         self.refresh()
 
     def _on_uninstall(self, install_id: int) -> None:

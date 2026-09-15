@@ -28,14 +28,34 @@ uv run dlss-manager rollback-all             # откатить вообще в�
 uv run dlss-manager clean-logs [--apply]     # логи/файлы враппера (dry-run по умолчанию)
 uv run dlss-manager clean-library            # убрать мусор из локальной библиотеки
 
-uv run dlss-manager optiscaler-releases                  # релизы OptiScaler с GitHub
-uv run dlss-manager optiscaler-targets <app_id>           # куда его можно поставить
-uv run dlss-manager optiscaler-install <app_id> [--target PATH] [--proxy dxgi.dll] [--version TAG]
-uv run dlss-manager optiscaler-list                       # активные установки
-uv run dlss-manager optiscaler-check                      # сверить версии с последним релизом
+uv run dlss-manager optiscaler-sources                    # доступные источники (официальный + форки)
+uv run dlss-manager optiscaler-releases [--source KEY]     # релизы с GitHub
+uv run dlss-manager optiscaler-targets <app_id>            # куда его можно поставить
+uv run dlss-manager optiscaler-install <app_id> [--source KEY] [--target PATH] [--proxy dxgi.dll] [--version TAG]
+uv run dlss-manager optiscaler-list                        # активные установки
+uv run dlss-manager optiscaler-check                       # сверить версии с последним релизом (на каждый source свой)
 uv run dlss-manager optiscaler-update <install_id>
 uv run dlss-manager optiscaler-uninstall <install_id>
 ```
+
+### Источники OptiScaler
+
+- `official` (по умолчанию) — [optiscaler/OptiScaler](https://github.com/optiscaler/OptiScaler).
+- `klebermotta-mfg` — сторонний экспериментальный форк с MFG-unlock (3x/4x/6x
+  Frame Generation на RTX 40 через патч `nvngx_dlssg.dll` в памяти) и заготовкой
+  под "Neural Rendering" для RTX 50 (сам файл `nvngx_dlssnr.dll` не скачивается
+  этим приложением ни при каких условиях — его нужно взять из пакета драйвера
+  NVIDIA самостоятельно и положить в папку игры руками). Это не официальный
+  DLSS 5. Не использовать MFG-unlock в мультиплеере — патчинг чужого кода в
+  памяти процесса игры может привести к бану.
+
+Были найдены и сознательно НЕ подключены ещё три репозитория с похожими
+названиями (rakanki911/DLSS5-Swapper, perseval-BLR/DLSS5-NeuralScreen,
+faisalkindi/DLSS5oneclick) — все три created за последние 2-3 недели, с
+аномально накрученными звёздами относительно возраста аккаунта автора,
+раздают только готовые .exe без исходников, у одного README прямо учит
+обходить предупреждение SmartScreen. Похоже на скам/малварь-кампанию вокруг
+хайпа "DLSS 5" — не запускать.
 
 ## GUI
 

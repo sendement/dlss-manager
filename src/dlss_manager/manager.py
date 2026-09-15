@@ -265,11 +265,14 @@ class Manager:
 
     # -- OptiScaler -----------------------------------------------------------
 
-    def optiscaler_releases(self, limit: int = 15) -> list[ReleaseInfo]:
-        return optiscaler.fetch_releases(limit=limit)
+    def optiscaler_sources(self) -> list[optiscaler.Source]:
+        return list(optiscaler.SOURCES.values())
 
-    def latest_optiscaler_release(self) -> ReleaseInfo:
-        return optiscaler.fetch_latest_release()
+    def optiscaler_releases(self, source_key: str = optiscaler.DEFAULT_SOURCE_KEY, limit: int = 15) -> list[ReleaseInfo]:
+        return optiscaler.fetch_releases(source_key=source_key, limit=limit)
+
+    def latest_optiscaler_release(self, source_key: str = optiscaler.DEFAULT_SOURCE_KEY) -> ReleaseInfo:
+        return optiscaler.fetch_latest_release(source_key=source_key)
 
     def suggest_optiscaler_targets(self, app_id: str) -> list[Path]:
         game = self.db.game(app_id)
@@ -283,13 +286,14 @@ class Manager:
         target_dir: Path,
         proxy_filename: str = optiscaler.DEFAULT_PROXY_DLL,
         release: ReleaseInfo | None = None,
+        source_key: str = optiscaler.DEFAULT_SOURCE_KEY,
         overwrite_conflict: bool = False,
     ) -> OptiScalerInstallResult:
         game = self.db.game(app_id)
         if game is None:
             raise ValueError(f"unknown game app_id={app_id}")
 
-        release = release or optiscaler.fetch_latest_release()
+        release = release or optiscaler.fetch_latest_release(source_key=source_key)
         archive = optiscaler.download_asset(release)
 
         with tempfile.TemporaryDirectory(prefix="optiscaler-") as tmp:
@@ -304,6 +308,7 @@ class Manager:
             game_name=game["name"],
             target_dir=str(result.target_dir),
             proxy_filename=result.proxy_filename,
+            source_key=release.source_key,
             version=release.tag,
             installed_files=json.dumps(result.installed_files),
             conflict_backup_path=str(result.conflict_backup_path) if result.conflict_backup_path else None,
@@ -325,7 +330,8 @@ class Manager:
         if row is None or row["removed_at"] is not None:
             raise ValueError(f"no active optiscaler install with id={install_id}")
 
-        release = release or optiscaler.fetch_latest_release()
+        source_key = row["source_key"]
+        release = release or optiscaler.fetch_latest_release(source_key=source_key)
         target_dir = Path(row["target_dir"])
         proxy_filename = row["proxy_filename"]
 
@@ -342,15 +348,24 @@ class Manager:
         self.db.mark_optiscaler_removed(install_id, _now())
 
         return self.install_optiscaler(
-            row["app_id"], target_dir, proxy_filename=proxy_filename, release=release, overwrite_conflict=True
+            row["app_id"],
+            target_dir,
+            proxy_filename=proxy_filename,
+            release=release,
+            source_key=source_key,
+            overwrite_conflict=True,
         )
 
     def check_optiscaler_updates(self) -> list[tuple]:
         """Returns (install_row, latest_release) pairs for installs whose
-        version differs from the newest one on GitHub."""
-        latest = optiscaler.fetch_latest_release()
-        return [
-            (row, latest)
-            for row in self.db.active_optiscaler_installs()
-            if row["version"] != latest.tag
-        ]
+        version differs from the newest one on GitHub, grouped per source."""
+        latest_by_source: dict[str, ReleaseInfo] = {}
+        pending = []
+        for row in self.db.active_optiscaler_installs():
+            source_key = row["source_key"]
+            if source_key not in latest_by_source:
+                latest_by_source[source_key] = optiscaler.fetch_latest_release(source_key=source_key)
+            latest = latest_by_source[source_key]
+            if row["version"] != latest.tag:
+                pending.append((row, latest))
+        return pending

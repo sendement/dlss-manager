@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS optiscaler_installs (
     game_name TEXT NOT NULL,
     target_dir TEXT NOT NULL,
     proxy_filename TEXT NOT NULL,
+    source_key TEXT NOT NULL DEFAULT 'official',
     version TEXT NOT NULL,
     installed_files TEXT NOT NULL,
     conflict_backup_path TEXT,
@@ -192,9 +193,9 @@ class Database:
     def record_optiscaler_install(self, **fields) -> int:
         cur = self.conn.execute(
             """INSERT INTO optiscaler_installs
-                   (app_id, game_name, target_dir, proxy_filename, version,
+                   (app_id, game_name, target_dir, proxy_filename, source_key, version,
                     installed_files, conflict_backup_path, installed_at)
-               VALUES (:app_id, :game_name, :target_dir, :proxy_filename, :version,
+               VALUES (:app_id, :game_name, :target_dir, :proxy_filename, :source_key, :version,
                        :installed_files, :conflict_backup_path, :installed_at)""",
             fields,
         )

@@ -23,12 +23,47 @@ from . import paths
 from .hashutil import sha256_file
 
 GITHUB_REPO = "optiscaler/OptiScaler"
-API_BASE = f"https://api.github.com/repos/{GITHUB_REPO}"
 HEADERS = {
     "Accept": "application/vnd.github+json",
     "User-Agent": "dlss-manager",
 }
 REQUEST_TIMEOUT = 20
+
+
+@dataclass(frozen=True)
+class Source:
+    key: str
+    repo: str
+    label: str
+    note: str = ""
+
+
+# Known places to get an OptiScaler build from. "official" is the upstream
+# project; anything else is a third-party fork and gets labeled as such
+# everywhere the UI shows it -- see README/memory for how each one was vetted.
+SOURCES: dict[str, Source] = {
+    "official": Source(
+        key="official",
+        repo=GITHUB_REPO,
+        label="OptiScaler (официальный)",
+    ),
+    "klebermotta-mfg": Source(
+        key="klebermotta-mfg",
+        repo="KleberMotta/OptiScaler-DLSS5-MFG-RTX40",
+        label="OptiScaler + Neural Rendering + MFG unlock RTX40 (эксперимент, сторонний форк)",
+        note=(
+            "Неофициальный форк. Не является настоящим DLSS 5. Содержит два отдельных куска:\n"
+            "1) MFG-unlock -- патчит nvngx_dlssg.dll В ПАМЯТИ, чтобы разрешить 3x/4x/6x Frame "
+            "Generation на RTX 40. Не использовать в мультиплеере -- это модификация кода "
+            "NVIDIA внутри процесса игры, риск бана.\n"
+            "2) 'Neural Rendering' -- требует RTX 50 и файл nvngx_dlssnr.dll (~165 МБ), который "
+            "в архиве НЕТ и который это приложение никогда не будет само скачивать откуда-либо -- "
+            "автор пишет, что его нужно взять из пакета драйвера NVIDIA самостоятельно.\n"
+            "Проверено автором лично на одной игре, поддерживается одним человеком."
+        ),
+    ),
+}
+DEFAULT_SOURCE_KEY = "official"
 
 # The DLL names OptiScaler.dll can be renamed to, per its own setup scripts --
 # whichever one the target game actually loads and doesn't already use.
@@ -59,6 +94,7 @@ class ExtractionError(OptiScalerError):
 
 @dataclass(frozen=True)
 class ReleaseInfo:
+    source_key: str
     tag: str
     name: str
     published_at: str | None
@@ -79,7 +115,14 @@ class InstallResult:
 
 # -- GitHub API -----------------------------------------------------------------
 
-def _parse_release(data: dict) -> ReleaseInfo:
+def _resolve_source(source_key: str) -> Source:
+    try:
+        return SOURCES[source_key]
+    except KeyError:
+        raise OptiScalerError(f"unknown OptiScaler source: {source_key!r}") from None
+
+
+def _parse_release(data: dict, source_key: str) -> ReleaseInfo:
     assets = data.get("assets", [])
     archive_asset = next((a for a in assets if a["name"].lower().endswith((".7z", ".zip"))), None)
     if archive_asset is None:
@@ -87,6 +130,7 @@ def _parse_release(data: dict) -> ReleaseInfo:
     digest = archive_asset.get("digest") or ""
     sha256 = digest.split(":", 1)[1] if digest.startswith("sha256:") else None
     return ReleaseInfo(
+        source_key=source_key,
         tag=data["tag_name"],
         name=data.get("name") or data["tag_name"],
         published_at=data.get("published_at"),
@@ -98,15 +142,22 @@ def _parse_release(data: dict) -> ReleaseInfo:
     )
 
 
-def fetch_latest_release() -> ReleaseInfo:
-    resp = requests.get(f"{API_BASE}/releases/latest", headers=HEADERS, timeout=REQUEST_TIMEOUT)
-    resp.raise_for_status()
-    return _parse_release(resp.json())
-
-
-def fetch_releases(limit: int = 15) -> list[ReleaseInfo]:
+def fetch_latest_release(source_key: str = DEFAULT_SOURCE_KEY) -> ReleaseInfo:
+    source = _resolve_source(source_key)
     resp = requests.get(
-        f"{API_BASE}/releases", headers=HEADERS, params={"per_page": limit}, timeout=REQUEST_TIMEOUT
+        f"https://api.github.com/repos/{source.repo}/releases/latest", headers=HEADERS, timeout=REQUEST_TIMEOUT
+    )
+    resp.raise_for_status()
+    return _parse_release(resp.json(), source_key)
+
+
+def fetch_releases(source_key: str = DEFAULT_SOURCE_KEY, limit: int = 15) -> list[ReleaseInfo]:
+    source = _resolve_source(source_key)
+    resp = requests.get(
+        f"https://api.github.com/repos/{source.repo}/releases",
+        headers=HEADERS,
+        params={"per_page": limit},
+        timeout=REQUEST_TIMEOUT,
     )
     resp.raise_for_status()
     out = []
@@ -114,7 +165,7 @@ def fetch_releases(limit: int = 15) -> list[ReleaseInfo]:
         if entry.get("draft"):
             continue
         try:
-            out.append(_parse_release(entry))
+            out.append(_parse_release(entry, source_key))
         except OptiScalerError:
             continue
     return out
@@ -124,7 +175,7 @@ def fetch_releases(limit: int = 15) -> list[ReleaseInfo]:
 
 def download_asset(release: ReleaseInfo) -> Path:
     """Cached by release tag; verifies against GitHub's published sha256 digest."""
-    dest_dir = paths.DATA_DIR / "optiscaler_cache" / release.tag
+    dest_dir = paths.DATA_DIR / "optiscaler_cache" / release.source_key / release.tag
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / release.asset_name
 
@@ -181,6 +232,20 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
     )
     if proc.returncode != 0:
         raise ExtractionError(f"7z extraction failed ({proc.returncode}): {proc.stderr or proc.stdout}")
+    _fix_backslash_paths(dest_dir)
+
+
+def _fix_backslash_paths(root: Path) -> None:
+    """Some Windows-built archives (seen from at least one third-party
+    OptiScaler fork) embed literal backslashes in zip entry names instead of
+    proper '/' separators. 7z then extracts them as one oddly-named file
+    sitting flat in the output dir rather than nested folders -- split those
+    back into real subdirectories."""
+    for p in list(root.rglob("*")):
+        if p.is_file() and "\\" in p.name:
+            dest = p.parent.joinpath(*p.name.split("\\"))
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            p.rename(dest)
 
 
 # -- install target detection --------------------------------------------------
