@@ -69,6 +69,14 @@ CREATE TABLE IF NOT EXISTS applied_changes (
 );
 """
 
+# (table, column, DDL-fragment-for-ADD-COLUMN) -- for columns added to a table
+# that already shipped without them. CREATE TABLE IF NOT EXISTS is a no-op on
+# a database that already has the table from an older version, so new columns
+# need an explicit ALTER TABLE here or they silently never show up.
+_COLUMN_MIGRATIONS = [
+    ("optiscaler_installs", "source_key", "TEXT NOT NULL DEFAULT 'official'"),
+]
+
 
 class Database:
     def __init__(self, db_path: Path):
@@ -77,7 +85,14 @@ class Database:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
+        self._apply_column_migrations()
         self.conn.commit()
+
+    def _apply_column_migrations(self) -> None:
+        for table, column, ddl in _COLUMN_MIGRATIONS:
+            existing = {row["name"] for row in self.conn.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def close(self) -> None:
         self.conn.close()
