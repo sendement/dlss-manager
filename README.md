@@ -11,6 +11,16 @@ Resolution / Frame Generation / Ray Reconstruction / Neural Rendering —
 
 ## Установка
 
+**Arch/CachyOS (пакет):**
+
+```bash
+sudo pacman -U dlss-manager-*.pkg.tar.zst   # из GitHub Releases
+# или собрать самому:
+cd packaging/arch && makepkg -si
+```
+
+**Из исходников (любая платформа, через uv):**
+
 ```bash
 uv sync
 ```
