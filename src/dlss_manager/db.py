@@ -38,6 +38,19 @@ CREATE TABLE IF NOT EXISTS library_files (
     added_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS optiscaler_installs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id TEXT NOT NULL,
+    game_name TEXT NOT NULL,
+    target_dir TEXT NOT NULL,
+    proxy_filename TEXT NOT NULL,
+    version TEXT NOT NULL,
+    installed_files TEXT NOT NULL,
+    conflict_backup_path TEXT,
+    installed_at TEXT NOT NULL,
+    removed_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS applied_changes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     app_id TEXT NOT NULL,
@@ -171,5 +184,40 @@ class Database:
     def mark_rolled_back(self, change_id: int, rolled_back_at: str) -> None:
         self.conn.execute(
             "UPDATE applied_changes SET rolled_back_at = ? WHERE id = ?", (rolled_back_at, change_id)
+        )
+        self.conn.commit()
+
+    # -- optiscaler installs ------------------------------------------------
+
+    def record_optiscaler_install(self, **fields) -> int:
+        cur = self.conn.execute(
+            """INSERT INTO optiscaler_installs
+                   (app_id, game_name, target_dir, proxy_filename, version,
+                    installed_files, conflict_backup_path, installed_at)
+               VALUES (:app_id, :game_name, :target_dir, :proxy_filename, :version,
+                       :installed_files, :conflict_backup_path, :installed_at)""",
+            fields,
+        )
+        self.conn.commit()
+        return cur.lastrowid
+
+    def active_optiscaler_installs(self, app_id: str | None = None) -> list[sqlite3.Row]:
+        if app_id:
+            return self.conn.execute(
+                "SELECT * FROM optiscaler_installs WHERE removed_at IS NULL AND app_id = ? ORDER BY installed_at DESC",
+                (app_id,),
+            ).fetchall()
+        return self.conn.execute(
+            "SELECT * FROM optiscaler_installs WHERE removed_at IS NULL ORDER BY installed_at DESC"
+        ).fetchall()
+
+    def optiscaler_install(self, install_id: int) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM optiscaler_installs WHERE id = ?", (install_id,)
+        ).fetchone()
+
+    def mark_optiscaler_removed(self, install_id: int, removed_at: str) -> None:
+        self.conn.execute(
+            "UPDATE optiscaler_installs SET removed_at = ? WHERE id = ?", (removed_at, install_id)
         )
         self.conn.commit()

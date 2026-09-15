@@ -27,6 +27,14 @@ uv run dlss-manager rollback <change_id>     # откатить одно изм�
 uv run dlss-manager rollback-all             # откатить вообще всё
 uv run dlss-manager clean-logs [--apply]     # логи/файлы враппера (dry-run по умолчанию)
 uv run dlss-manager clean-library            # убрать мусор из локальной библиотеки
+
+uv run dlss-manager optiscaler-releases                  # релизы OptiScaler с GitHub
+uv run dlss-manager optiscaler-targets <app_id>           # куда его можно поставить
+uv run dlss-manager optiscaler-install <app_id> [--target PATH] [--proxy dxgi.dll] [--version TAG]
+uv run dlss-manager optiscaler-list                       # активные установки
+uv run dlss-manager optiscaler-check                      # сверить версии с последним релизом
+uv run dlss-manager optiscaler-update <install_id>
+uv run dlss-manager optiscaler-uninstall <install_id>
 ```
 
 ## GUI
@@ -46,5 +54,12 @@ uv run dlss-manager gui
 - `manager.py` — сканирование, применение версии (с бэкапом), откат
   (одного изменения или всех разом), очистка логов известных DLSS-врапперов
   (Streamline, DLSSTweaks, OptiScaler, Special K) и мусора в библиотеке.
-- Ничего никуда не скачивается: версии в библиотеку попадают либо через
+- Ничего никуда не скачивается: версии DLSS в библиотеку попадают либо через
   сканирование уже установленных игр, либо через ручной импорт файла.
+- `optiscaler.py` — качает релизы [OptiScaler](https://github.com/optiscaler/OptiScaler)
+  прямо с GitHub Releases (с проверкой sha256 из их же API), распаковывает `.7z`
+  через системный `7z`/`7za` (py7zr не умеет в BCJ2-фильтр, которым сжаты их
+  архивы) и ставит по той же логике, что и их `setup_windows.bat`/`setup_linux.sh`
+  (переименование `OptiScaler.dll` в выбранный proxy-DLL). Установка/обновление/
+  удаление отслеживаются в своей таблице БД — свой манифест вместо их bash-анинсталлера,
+  чтобы это укладывалось в общую историю изменений приложения.

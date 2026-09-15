@@ -23,6 +23,7 @@ from ..components import KEY_TO_COMPONENT
 from ..library import UnknownComponentError
 from ..manager import Manager
 from ..pe_version import version_sort_key
+from .optiscaler_tab import OptiScalerTab
 
 
 class MainWindow(QMainWindow):
@@ -47,6 +48,9 @@ class MainWindow(QMainWindow):
 
         self.history_table = self._build_history_table()
         self.tabs.addTab(self.history_table, "История")
+
+        self.optiscaler_tab = OptiScalerTab(self.manager, lambda msg: self.statusBar().showMessage(msg, 5000))
+        self.tabs.addTab(self.optiscaler_tab, "OptiScaler")
 
         self.statusBar().showMessage("Готово")
 
@@ -112,6 +116,8 @@ class MainWindow(QMainWindow):
     def refresh(self) -> None:
         self._refresh_games_table()
         self._refresh_history_table()
+        if hasattr(self, "optiscaler_tab"):
+            self.optiscaler_tab.refresh()
 
     def _refresh_games_table(self) -> None:
         table = self.games_table

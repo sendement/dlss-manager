@@ -3,15 +3,19 @@ cleanup. This is the one module both the CLI and the GUI drive."""
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import library, paths
+from . import library, optiscaler, paths
 from .db import Database
 from .hashutil import sha256_file
+from .optiscaler import InstallResult as OptiScalerInstallResult
+from .optiscaler import ReleaseInfo
 from .pe_version import read_pe_version
 from .scanner import find_component_dlls, inspect_dll
 from .steam import SteamGame, list_installed_games
@@ -258,3 +262,95 @@ class Manager:
 
     def dedupe_library(self) -> list[str]:
         return library.dedupe_library(self.db)
+
+    # -- OptiScaler -----------------------------------------------------------
+
+    def optiscaler_releases(self, limit: int = 15) -> list[ReleaseInfo]:
+        return optiscaler.fetch_releases(limit=limit)
+
+    def latest_optiscaler_release(self) -> ReleaseInfo:
+        return optiscaler.fetch_latest_release()
+
+    def suggest_optiscaler_targets(self, app_id: str) -> list[Path]:
+        game = self.db.game(app_id)
+        if game is None:
+            raise ValueError(f"unknown game app_id={app_id}")
+        return optiscaler.suggest_install_targets(Path(game["install_dir"]))
+
+    def install_optiscaler(
+        self,
+        app_id: str,
+        target_dir: Path,
+        proxy_filename: str = optiscaler.DEFAULT_PROXY_DLL,
+        release: ReleaseInfo | None = None,
+        overwrite_conflict: bool = False,
+    ) -> OptiScalerInstallResult:
+        game = self.db.game(app_id)
+        if game is None:
+            raise ValueError(f"unknown game app_id={app_id}")
+
+        release = release or optiscaler.fetch_latest_release()
+        archive = optiscaler.download_asset(release)
+
+        with tempfile.TemporaryDirectory(prefix="optiscaler-") as tmp:
+            staging = Path(tmp) / "staging"
+            optiscaler.extract_archive(archive, staging)
+            result = optiscaler.install_to(
+                staging, target_dir, proxy_filename, overwrite_conflict=overwrite_conflict
+            )
+
+        self.db.record_optiscaler_install(
+            app_id=app_id,
+            game_name=game["name"],
+            target_dir=str(result.target_dir),
+            proxy_filename=result.proxy_filename,
+            version=release.tag,
+            installed_files=json.dumps(result.installed_files),
+            conflict_backup_path=str(result.conflict_backup_path) if result.conflict_backup_path else None,
+            installed_at=_now(),
+        )
+        return result
+
+    def uninstall_optiscaler(self, install_id: int) -> None:
+        row = self.db.optiscaler_install(install_id)
+        if row is None or row["removed_at"] is not None:
+            raise ValueError(f"no active optiscaler install with id={install_id}")
+        optiscaler.uninstall_from(
+            Path(row["target_dir"]), json.loads(row["installed_files"]), row["conflict_backup_path"]
+        )
+        self.db.mark_optiscaler_removed(install_id, _now())
+
+    def update_optiscaler(self, install_id: int, release: ReleaseInfo | None = None) -> OptiScalerInstallResult:
+        row = self.db.optiscaler_install(install_id)
+        if row is None or row["removed_at"] is not None:
+            raise ValueError(f"no active optiscaler install with id={install_id}")
+
+        release = release or optiscaler.fetch_latest_release()
+        target_dir = Path(row["target_dir"])
+        proxy_filename = row["proxy_filename"]
+
+        # OptiScaler.ini may hold user tweaks (upscaler choice, FG options, ...);
+        # keep a dated copy before the reinstall overwrites it with the new default.
+        ini_path = target_dir / "OptiScaler.ini"
+        if ini_path.is_file():
+            backup_dir = paths.BACKUPS_DIR / "optiscaler_ini"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+            shutil.copy2(ini_path, backup_dir / f"{stamp}__{row['app_id']}__OptiScaler.ini")
+
+        optiscaler.uninstall_from(target_dir, json.loads(row["installed_files"]), row["conflict_backup_path"])
+        self.db.mark_optiscaler_removed(install_id, _now())
+
+        return self.install_optiscaler(
+            row["app_id"], target_dir, proxy_filename=proxy_filename, release=release, overwrite_conflict=True
+        )
+
+    def check_optiscaler_updates(self) -> list[tuple]:
+        """Returns (install_row, latest_release) pairs for installs whose
+        version differs from the newest one on GitHub."""
+        latest = optiscaler.fetch_latest_release()
+        return [
+            (row, latest)
+            for row in self.db.active_optiscaler_installs()
+            if row["version"] != latest.tag
+        ]

@@ -7,6 +7,7 @@ from pathlib import Path
 from .components import COMPONENTS
 from .library import UnknownComponentError
 from .manager import Manager
+from .optiscaler import PROXY_DLL_CHOICES, ExtractionError, OptiScalerError
 
 
 def _print_table(rows: list[list[str]], headers: list[str]) -> None:
@@ -127,6 +128,101 @@ def cmd_clean_library(args, m: Manager) -> None:
         print(n)
 
 
+def _find_release(m: Manager, tag: str | None):
+    if tag is None:
+        return m.latest_optiscaler_release()
+    for r in m.optiscaler_releases(limit=30):
+        if r.tag == tag:
+            return r
+    print(f"error: release {tag!r} not found in the last 30 releases", file=sys.stderr)
+    sys.exit(1)
+
+
+def cmd_optiscaler_releases(args, m: Manager) -> None:
+    try:
+        releases = m.optiscaler_releases(limit=args.limit)
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    _print_table(
+        [[r.tag, r.published_at or "?", f"{r.asset_size / 1_048_576:.1f} MB"] for r in releases],
+        ["tag", "published_at", "asset"],
+    )
+
+
+def cmd_optiscaler_targets(args, m: Manager) -> None:
+    try:
+        targets = m.suggest_optiscaler_targets(args.app_id)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not targets:
+        print("No candidate folders found (no .exe under the install dir?).")
+        return
+    for i, t in enumerate(targets):
+        print(f"[{i}] {t}")
+
+
+def cmd_optiscaler_install(args, m: Manager) -> None:
+    try:
+        release = _find_release(m, args.version)
+        target_dir = Path(args.target) if args.target else m.suggest_optiscaler_targets(args.app_id)[0]
+        result = m.install_optiscaler(
+            args.app_id, target_dir, proxy_filename=args.proxy, release=release, overwrite_conflict=args.overwrite
+        )
+    except (ValueError, FileExistsError, OptiScalerError, ExtractionError, IndexError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Installed OptiScaler {release.tag} -> {result.target_dir} as {result.proxy_filename}")
+    if result.conflict_backup_path:
+        print(f"(existing {result.proxy_filename} backed up to {result.conflict_backup_path})")
+
+
+def cmd_optiscaler_list(args, m: Manager) -> None:
+    rows = m.db.active_optiscaler_installs()
+    if not rows:
+        print("No active OptiScaler installs.")
+        return
+    _print_table(
+        [[r["id"], r["game_name"], r["version"], r["proxy_filename"], r["target_dir"]] for r in rows],
+        ["id", "game", "version", "proxy", "target_dir"],
+    )
+
+
+def cmd_optiscaler_check(args, m: Manager) -> None:
+    try:
+        updates = m.check_optiscaler_updates()
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not updates:
+        print("All OptiScaler installs are up to date.")
+        return
+    _print_table(
+        [[row["id"], row["game_name"], row["version"], latest.tag] for row, latest in updates],
+        ["id", "game", "installed", "latest"],
+    )
+
+
+def cmd_optiscaler_update(args, m: Manager) -> None:
+    try:
+        release = _find_release(m, args.version)
+        result = m.update_optiscaler(args.install_id, release=release)
+    except (ValueError, OptiScalerError, ExtractionError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Updated to {release.tag} -> {result.target_dir}")
+
+
+def cmd_optiscaler_uninstall(args, m: Manager) -> None:
+    try:
+        m.uninstall_optiscaler(args.install_id)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Uninstalled OptiScaler install #{args.install_id}.")
+
+
 def cmd_gui(args, m: Manager) -> None:
     m.close()
     from .gui.app import run_gui
@@ -177,6 +273,37 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("clean-library", help="remove orphaned/stale files from the local DLL library")
     s.set_defaults(func=cmd_clean_library)
+
+    s = sub.add_parser("optiscaler-releases", help="list recent OptiScaler releases from GitHub")
+    s.add_argument("--limit", type=int, default=15)
+    s.set_defaults(func=cmd_optiscaler_releases)
+
+    s = sub.add_parser("optiscaler-targets", help="suggest install folders for a game")
+    s.add_argument("app_id")
+    s.set_defaults(func=cmd_optiscaler_targets)
+
+    s = sub.add_parser("optiscaler-install", help="download and install OptiScaler into a game")
+    s.add_argument("app_id")
+    s.add_argument("--target", default=None, help="folder to install into (default: best guess)")
+    s.add_argument("--proxy", choices=PROXY_DLL_CHOICES, default="dxgi.dll")
+    s.add_argument("--version", default=None, help="release tag (default: latest)")
+    s.add_argument("--overwrite", action="store_true", help="overwrite an existing file with the same proxy name")
+    s.set_defaults(func=cmd_optiscaler_install)
+
+    s = sub.add_parser("optiscaler-list", help="list active OptiScaler installs")
+    s.set_defaults(func=cmd_optiscaler_list)
+
+    s = sub.add_parser("optiscaler-check", help="check installed OptiScaler versions against the latest release")
+    s.set_defaults(func=cmd_optiscaler_check)
+
+    s = sub.add_parser("optiscaler-update", help="update an install to a release (default: latest)")
+    s.add_argument("install_id", type=int)
+    s.add_argument("--version", default=None)
+    s.set_defaults(func=cmd_optiscaler_update)
+
+    s = sub.add_parser("optiscaler-uninstall", help="remove an OptiScaler install")
+    s.add_argument("install_id", type=int)
+    s.set_defaults(func=cmd_optiscaler_uninstall)
 
     s = sub.add_parser("gui", help="launch the graphical interface")
     s.set_defaults(func=cmd_gui)
