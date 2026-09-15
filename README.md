@@ -43,13 +43,19 @@ uv run dlss-manager optiscaler-uninstall <install_id>
 ### Источники OptiScaler
 
 - `official` (по умолчанию) — [optiscaler/OptiScaler](https://github.com/optiscaler/OptiScaler).
-- `klebermotta-mfg` — сторонний экспериментальный форк с MFG-unlock (3x/4x/6x
-  Frame Generation на RTX 40 через патч `nvngx_dlssg.dll` в памяти) и заготовкой
-  под "Neural Rendering" для RTX 50 (сам файл `nvngx_dlssnr.dll` не скачивается
-  этим приложением ни при каких условиях — его нужно взять из пакета драйвера
-  NVIDIA самостоятельно и положить в папку игры руками). Это не официальный
-  DLSS 5. Не использовать MFG-unlock в мультиплеере — патчинг чужого кода в
-  памяти процесса игры может привести к бану.
+- `dagherbou-dlssnr` — сторонний форк апстрима, добавляет DLSS Neural
+  Rendering (DLSS 5 — реальная технология NVIDIA, анонсирована на GTC 2026,
+  но официальной интеграции "в любую игру" NVIDIA не публикует) поверх
+  DLSS/FSR/XeSS, без MFG-unlock. Это база, на которой сделан `klebermotta-mfg`.
+- `klebermotta-mfg` — форк форка `dagherbou-dlssnr`, добавляет ещё MFG-unlock
+  (3x/4x/6x Frame Generation на RTX 40 через патч `nvngx_dlssg.dll` в памяти —
+  не использовать в мультиплеере, риск бана).
+
+Оба сторонних форка требуют файл `nvngx_dlssnr.dll` (~165 МБ) — его нет в
+архивах, авторы прямо пишут, что распространять его не будут (это файл
+NVIDIA). **Это приложение не скачивает его ни при каких условиях** — нужно
+взять из игры, которая официально поддерживает DLSS 5 (например, NBA 2K27),
+или добавить самостоятельно из любого источника, которому доверяете сами.
 
 Были найдены и сознательно НЕ подключены ещё три репозитория с похожими
 названиями (rakanki911/DLSS5-Swapper, perseval-BLR/DLSS5-NeuralScreen,

@@ -47,18 +47,34 @@ SOURCES: dict[str, Source] = {
         repo=GITHUB_REPO,
         label="OptiScaler (официальный)",
     ),
+    "dagherbou-dlssnr": Source(
+        key="dagherbou-dlssnr",
+        repo="Dagherbou/OptiScaler_DLSSNR",
+        label="OptiScaler + DLSS Neural Rendering / DLSS 5 (сторонний форк, без MFG-unlock)",
+        note=(
+            "Неофициальный форк upstream OptiScaler (тот же круг контрибьюторов, что и в "
+            "официальном проекте). Добавляет DLSS Neural Rendering (DLSS 5 -- реальная технология "
+            "NVIDIA, анонсирована на GTC 2026, но официальной интеграции 'в любую игру' NVIDIA не "
+            "публикует) поверх DLSS/FSR/XeSS. Без MFG-unlock и без патчинга NVIDIA-кода в памяти.\n"
+            "Требует файл nvngx_dlssnr.dll (~165 МБ) -- в архиве его НЕТ, автор прямо пишет, что "
+            "распространять его не будет (это файл NVIDIA). Это приложение никогда не будет само "
+            "его скачивать откуда-либо -- добавить его в папку игры нужно вручную.\n"
+            "Это база, на которой сделан форк klebermotta-mfg (тот добавляет поверх ещё и MFG-unlock)."
+        ),
+    ),
     "klebermotta-mfg": Source(
         key="klebermotta-mfg",
         repo="KleberMotta/OptiScaler-DLSS5-MFG-RTX40",
         label="OptiScaler + Neural Rendering + MFG unlock RTX40 (эксперимент, сторонний форк)",
         note=(
-            "Неофициальный форк. Не является настоящим DLSS 5. Содержит два отдельных куска:\n"
-            "1) MFG-unlock -- патчит nvngx_dlssg.dll В ПАМЯТИ, чтобы разрешить 3x/4x/6x Frame "
+            "Неофициальный форк форка Dagherbou/OptiScaler_DLSSNR (см. выше), добавляет ещё один "
+            "кусок:\n"
+            "MFG-unlock -- патчит nvngx_dlssg.dll В ПАМЯТИ, чтобы разрешить 3x/4x/6x Frame "
             "Generation на RTX 40. Не использовать в мультиплеере -- это модификация кода "
             "NVIDIA внутри процесса игры, риск бана.\n"
-            "2) 'Neural Rendering' -- требует RTX 50 и файл nvngx_dlssnr.dll (~165 МБ), который "
-            "в архиве НЕТ и который это приложение никогда не будет само скачивать откуда-либо -- "
-            "автор пишет, что его нужно взять из пакета драйвера NVIDIA самостоятельно.\n"
+            "Neural Rendering здесь работает так же, как в dagherbou-dlssnr: требует nvngx_dlssnr.dll "
+            "(~165 МБ), которого в архиве нет и который это приложение никогда не будет само "
+            "скачивать откуда-либо -- нужно добавить его в папку игры самостоятельно.\n"
             "Проверено автором лично на одной игре, поддерживается одним человеком."
         ),
     ),
