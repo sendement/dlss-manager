@@ -147,6 +147,9 @@ class Database:
     def library_file_by_hash(self, sha256: str) -> sqlite3.Row | None:
         return self.conn.execute("SELECT * FROM library_files WHERE sha256 = ?", (sha256,)).fetchone()
 
+    def library_file(self, file_id: int) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT * FROM library_files WHERE id = ?", (file_id,)).fetchone()
+
     def library_files(self, component_key: str | None = None) -> list[sqlite3.Row]:
         if component_key:
             return self.conn.execute(

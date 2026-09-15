@@ -89,6 +89,14 @@ def entry_path(row) -> Path:
     return paths.LIBRARY_DIR / row["component_key"] / row["stored_filename"]
 
 
+def remove_file(db: Database, file_id: int) -> None:
+    row = db.library_file(file_id)
+    if row is None:
+        raise ValueError(f"no library file with id={file_id}")
+    entry_path(row).unlink(missing_ok=True)
+    db.delete_library_file(file_id)
+
+
 def dedupe_library(db: Database) -> list[str]:
     """Clean up the on-disk library dir: remove files with no matching DB row,
     and DB rows whose file went missing. Returns human-readable notes."""

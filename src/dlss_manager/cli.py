@@ -66,6 +66,15 @@ def cmd_import(args, m: Manager) -> None:
     print(f"{status}: {entry.component.display_name} {entry.version} -> {entry.path}")
 
 
+def cmd_library_remove(args, m: Manager) -> None:
+    try:
+        m.remove_library_file(args.library_id)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Removed library file #{args.library_id}.")
+
+
 def cmd_apply(args, m: Manager) -> None:
     try:
         result = m.apply_version(args.app_id, args.component, args.library_id)
@@ -276,6 +285,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("import", help="import a DLL file into the local library")
     s.add_argument("path")
     s.set_defaults(func=cmd_import)
+
+    s = sub.add_parser("library-remove", help="remove a file from the local library")
+    s.add_argument("library_id", type=int)
+    s.set_defaults(func=cmd_library_remove)
 
     s = sub.add_parser("apply", help="swap a game's DLSS component to a library version")
     s.add_argument("app_id")

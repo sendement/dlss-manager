@@ -109,8 +109,26 @@ class Manager:
     def import_dll(self, src_path: Path) -> library.LibraryEntry:
         return library.import_file(self.db, src_path, source="manual-import")
 
+    def import_dlls(self, src_paths: list[Path]) -> tuple[list[library.LibraryEntry], list[tuple[Path, str]]]:
+        """Best-effort bulk import (e.g. drag-and-drop of several files at once).
+        Returns (entries, [(path, error_message), ...]) so callers can report both."""
+        entries: list[library.LibraryEntry] = []
+        errors: list[tuple[Path, str]] = []
+        for p in src_paths:
+            try:
+                entries.append(self.import_dll(p))
+            except (library.UnknownComponentError, OSError) as e:
+                errors.append((p, str(e)))
+        return entries, errors
+
     def library_versions(self, component_key: str):
         return self.db.library_files(component_key=component_key)
+
+    def all_library_files(self):
+        return self.db.library_files()
+
+    def remove_library_file(self, file_id: int) -> None:
+        library.remove_file(self.db, file_id)
 
     # -- apply / rollback -----------------------------------------------------
 

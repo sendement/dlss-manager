@@ -21,6 +21,7 @@ uv run dlss-manager scan                    # просканировать Steam
 uv run dlss-manager list                     # игры + найденные компоненты
 uv run dlss-manager library                  # версии DLL в локальной библиотеке
 uv run dlss-manager import path/to/nvngx_dlss.dll
+uv run dlss-manager library-remove <library_id>
 uv run dlss-manager apply <app_id> super_resolution <library_id>
 uv run dlss-manager history                  # активные изменения
 uv run dlss-manager rollback <change_id>     # откатить одно изменение
@@ -62,6 +63,13 @@ faisalkindi/DLSS5oneclick) — все три created за последние 2-3
 ```bash
 uv run dlss-manager gui
 ```
+
+Вкладка «Библиотека» — все DLL, что попали в библиотеку (сканом или вручную),
+с размером, хэшем, источником и удалением. Добавить свои файлы можно тремя
+способами: перетащить `.dll` на окно (работает на любой вкладке), кнопкой
+«Импортировать DLL...» (на вкладке «Библиотека» или в тулбаре, оба варианта
+поддерживают выбор нескольких файлов сразу) или через меню «Файл →
+Импортировать DLL...».
 
 ## Как это устроено
 

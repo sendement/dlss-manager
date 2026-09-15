@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -20,9 +19,9 @@ from PySide6.QtWidgets import (
 )
 
 from ..components import KEY_TO_COMPONENT
-from ..library import UnknownComponentError
 from ..manager import Manager
 from ..pe_version import version_sort_key
+from .library_tab import LibraryTab
 from .optiscaler_tab import OptiScalerTab
 
 
@@ -33,6 +32,9 @@ class MainWindow(QMainWindow):
         self.resize(980, 600)
 
         self.manager = Manager()
+        self.setAcceptDrops(True)
+
+        self._build_menu_bar()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -49,12 +51,30 @@ class MainWindow(QMainWindow):
         self.history_table = self._build_history_table()
         self.tabs.addTab(self.history_table, "История")
 
-        self.optiscaler_tab = OptiScalerTab(self.manager, lambda msg: self.statusBar().showMessage(msg, 5000))
+        status_cb = lambda msg: self.statusBar().showMessage(msg, 5000)
+
+        self.library_tab = LibraryTab(self.manager, status_cb)
+        self.tabs.addTab(self.library_tab, "Библиотека")
+
+        self.optiscaler_tab = OptiScalerTab(self.manager, status_cb)
         self.tabs.addTab(self.optiscaler_tab, "OptiScaler")
 
         self.statusBar().showMessage("Готово")
 
         self.refresh()
+
+    def _build_menu_bar(self) -> None:
+        file_menu = self.menuBar().addMenu("Файл")
+
+        import_action = file_menu.addAction("Импортировать DLL...")
+        import_action.triggered.connect(self.on_import)
+
+        scan_action = file_menu.addAction("Сканировать Steam")
+        scan_action.triggered.connect(self.on_scan)
+
+        file_menu.addSeparator()
+        exit_action = file_menu.addAction("Выход")
+        exit_action.triggered.connect(self.close)
 
     # -- layout -----------------------------------------------------------
 
@@ -116,6 +136,8 @@ class MainWindow(QMainWindow):
     def refresh(self) -> None:
         self._refresh_games_table()
         self._refresh_history_table()
+        if hasattr(self, "library_tab"):
+            self.library_tab.refresh()
         if hasattr(self, "optiscaler_tab"):
             self.optiscaler_tab.refresh()
 
@@ -190,17 +212,33 @@ class MainWindow(QMainWindow):
             self.refresh()
 
     def on_import(self) -> None:
-        path_str, _ = QFileDialog.getOpenFileName(self, "Импортировать DLL", str(Path.home()), "DLL files (*.dll)")
-        if not path_str:
+        paths_str, _ = QFileDialog.getOpenFileNames(
+            self, "Импортировать DLL", str(Path.home()), "DLL files (*.dll)"
+        )
+        if not paths_str:
             return
-        try:
-            entry = self.manager.import_dll(Path(path_str))
-        except UnknownComponentError as e:
-            QMessageBox.warning(self, "Неизвестный компонент", str(e))
+        self.library_tab.import_paths([Path(p) for p in paths_str])
+        self.tabs.setCurrentWidget(self.library_tab)
+
+    # -- drag & drop ----------------------------------------------------------
+
+    def dragEnterEvent(self, event) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:
+        dropped = [Path(u.toLocalFile()) for u in event.mimeData().urls() if u.isLocalFile()]
+        dlls = [p for p in dropped if p.suffix.lower() == ".dll"]
+        if not dlls:
+            QMessageBox.warning(self, "Не .dll", "Перетащите файлы с расширением .dll.")
             return
-        status = "добавлен в библиотеку" if entry.is_new else "уже был в библиотеке"
-        self.statusBar().showMessage(f"{entry.component.display_name} {entry.version}: {status}", 5000)
-        self.refresh()
+        event.acceptProposedAction()
+        self.library_tab.import_paths(dlls)
+        self.tabs.setCurrentWidget(self.library_tab)
 
     def on_apply(self, app_id: str, component_key: str, combo: QComboBox) -> None:
         lib_id = combo.currentData()
