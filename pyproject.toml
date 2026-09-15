@@ -1,8 +1,9 @@
 [project]
 name = "dlss-manager"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "Scan Steam games, manage DLSS DLL versions, and install OptiScaler -- CLI and PySide6 GUI"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "pefile>=2024.8.26",
