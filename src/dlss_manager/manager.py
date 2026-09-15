@@ -314,12 +314,33 @@ class Manager:
         release = release or optiscaler.fetch_latest_release(source_key=source_key)
         archive = optiscaler.download_asset(release)
 
+        # A fresh install into a folder that already has an active install recorded
+        # is a reinstall of our own build, not a genuine conflict with some other
+        # tool -- carry the ORIGINAL conflict backup (the true pre-OptiScaler file,
+        # if any) forward instead of treating our own previous build as a new one.
+        target_dir_str = str(target_dir)
+        superseded = [
+            r for r in self.db.active_optiscaler_installs(app_id) if r["target_dir"] == target_dir_str
+        ]
+        inherited_conflict_backup = superseded[0]["conflict_backup_path"] if superseded else None
+
         with tempfile.TemporaryDirectory(prefix="optiscaler-") as tmp:
             staging = Path(tmp) / "staging"
             optiscaler.extract_archive(archive, staging)
             result = optiscaler.install_to(
-                staging, target_dir, proxy_filename, overwrite_conflict=overwrite_conflict
+                staging, target_dir, proxy_filename, overwrite_conflict=overwrite_conflict or bool(superseded)
             )
+
+        now = _now()
+        for row in superseded:
+            self.db.mark_optiscaler_removed(row["id"], now)
+
+        if superseded and result.conflict_backup_path:
+            # That backup is just our own previous build's file, not worth keeping.
+            result.conflict_backup_path.unlink(missing_ok=True)
+            conflict_backup_path = inherited_conflict_backup
+        else:
+            conflict_backup_path = str(result.conflict_backup_path) if result.conflict_backup_path else None
 
         self.db.record_optiscaler_install(
             app_id=app_id,
@@ -329,8 +350,8 @@ class Manager:
             source_key=release.source_key,
             version=release.tag,
             installed_files=json.dumps(result.installed_files),
-            conflict_backup_path=str(result.conflict_backup_path) if result.conflict_backup_path else None,
-            installed_at=_now(),
+            conflict_backup_path=conflict_backup_path,
+            installed_at=now,
         )
         return result
 
@@ -342,6 +363,18 @@ class Manager:
             Path(row["target_dir"]), json.loads(row["installed_files"]), row["conflict_backup_path"]
         )
         self.db.mark_optiscaler_removed(install_id, _now())
+
+    def rollback_optiscaler_to_clean_state(self, install_id: int) -> list[Path]:
+        """Uninstall, then also sweep whatever OptiScaler/wrapper log & state
+        files it left behind at runtime (OptiScaler.log and friends aren't
+        part of the installed-files manifest -- they get created when the
+        game actually runs). Returns the extra files that were removed."""
+        row = self.db.optiscaler_install(install_id)
+        if row is None or row["removed_at"] is not None:
+            raise ValueError(f"no active optiscaler install with id={install_id}")
+        app_id = row["app_id"]
+        self.uninstall_optiscaler(install_id)
+        return self.clean_wrapper_artifacts(app_id=app_id, dry_run=False)
 
     def update_optiscaler(self, install_id: int, release: ReleaseInfo | None = None) -> OptiScalerInstallResult:
         row = self.db.optiscaler_install(install_id)

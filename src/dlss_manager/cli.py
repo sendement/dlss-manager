@@ -260,6 +260,17 @@ def cmd_optiscaler_uninstall(args, m: Manager) -> None:
     print(f"Uninstalled OptiScaler install #{args.install_id}.")
 
 
+def cmd_optiscaler_rollback(args, m: Manager) -> None:
+    try:
+        cleaned = m.rollback_optiscaler_to_clean_state(args.install_id)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Rolled back OptiScaler install #{args.install_id} to a clean game state.")
+    for p in cleaned:
+        print(f"  also removed: {p}")
+
+
 def cmd_gui(args, m: Manager) -> None:
     m.close()
     from .gui.app import run_gui
@@ -350,6 +361,12 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("optiscaler-uninstall", help="remove an OptiScaler install")
     s.add_argument("install_id", type=int)
     s.set_defaults(func=cmd_optiscaler_uninstall)
+
+    s = sub.add_parser(
+        "optiscaler-rollback", help="uninstall + sweep leftover OptiScaler/wrapper logs for a clean game state"
+    )
+    s.add_argument("install_id", type=int)
+    s.set_defaults(func=cmd_optiscaler_rollback)
 
     s = sub.add_parser("gui", help="launch the graphical interface")
     s.set_defaults(func=cmd_gui)

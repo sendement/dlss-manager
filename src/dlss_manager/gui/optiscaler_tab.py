@@ -112,8 +112,10 @@ class OptiScalerTab(QWidget):
     # -- layout -----------------------------------------------------------
 
     def _build_installs_table(self) -> QTableWidget:
-        table = QTableWidget(0, 8)
-        table.setHorizontalHeaderLabels(["Игра", "Источник", "Версия", "Proxy", "Папка", "Статус", "", ""])
+        table = QTableWidget(0, 9)
+        table.setHorizontalHeaderLabels(
+            ["Игра", "Источник", "Версия", "Proxy", "Папка", "Статус", "", "", ""]
+        )
         header = table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -123,6 +125,7 @@ class OptiScalerTab(QWidget):
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectRows)
         table.verticalHeader().setVisible(False)
@@ -196,6 +199,10 @@ class OptiScalerTab(QWidget):
             remove_btn = QPushButton("Удалить")
             remove_btn.clicked.connect(lambda _c=False, install_id=row["id"]: self._on_uninstall(install_id))
             table.setCellWidget(r, 7, remove_btn)
+
+            rollback_btn = QPushButton("Откатить до чистого состояния")
+            rollback_btn.clicked.connect(lambda _c=False, install_id=row["id"]: self._on_rollback_clean(install_id))
+            table.setCellWidget(r, 8, rollback_btn)
 
     # -- actions ------------------------------------------------------------
 
@@ -318,6 +325,22 @@ class OptiScalerTab(QWidget):
             QMessageBox.critical(self, "Ошибка", str(e))
             return
         self.set_status(f"OptiScaler (#{install_id}) удалён")
+        self.refresh()
+
+    def _on_rollback_clean(self, install_id: int) -> None:
+        if QMessageBox.question(
+            self,
+            "Откатить до чистого состояния",
+            "Удалить файлы OptiScaler И все его лог/state-файлы (OptiScaler.log и т.п.), "
+            "оставшиеся после запуска игры? Папка игры вернётся в состояние без OptiScaler.",
+        ) != QMessageBox.Yes:
+            return
+        try:
+            cleaned = self.manager.rollback_optiscaler_to_clean_state(install_id)
+        except ValueError as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+            return
+        self.set_status(f"OptiScaler (#{install_id}) удалён, дополнительно очищено файлов: {len(cleaned)}")
         self.refresh()
 
     def _on_check_updates(self) -> None:
