@@ -309,7 +309,10 @@ class OptiScalerTab(QWidget):
         finally:
             QApplication.restoreOverrideCursor()
 
-        self.set_status(f"{source.label if source else source_key} {release.tag} установлен в {result.target_dir}")
+        status = f"{source.label if source else source_key} {release.tag} установлен в {result.target_dir}"
+        if "nvngx_dlssnr.dll" in result.installed_files:
+            status += " (nvngx_dlssnr.dll подставлен из библиотеки)"
+        self.set_status(status)
         self.refresh()
         if sys.platform.startswith("linux"):
             self._show_launch_option_hint(result.proxy_filename)

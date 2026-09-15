@@ -207,6 +207,8 @@ def cmd_optiscaler_install(args, m: Manager) -> None:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
     print(f"Installed {source.label} {release.tag} -> {result.target_dir} as {result.proxy_filename}")
+    if "nvngx_dlssnr.dll" in result.installed_files:
+        print("(nvngx_dlssnr.dll copied in from the local library)")
     if result.conflict_backup_path:
         print(f"(existing {result.proxy_filename} backed up to {result.conflict_backup_path})")
     if sys.platform.startswith("linux"):

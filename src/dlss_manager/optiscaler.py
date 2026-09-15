@@ -36,6 +36,7 @@ class Source:
     repo: str
     label: str
     note: str = ""
+    supports_neural_rendering: bool = False
 
 
 # Known places to get an OptiScaler build from. "official" is the upstream
@@ -51,14 +52,16 @@ SOURCES: dict[str, Source] = {
         key="dagherbou-dlssnr",
         repo="Dagherbou/OptiScaler_DLSSNR",
         label="OptiScaler + DLSS Neural Rendering / DLSS 5 (сторонний форк, без MFG-unlock)",
+        supports_neural_rendering=True,
         note=(
             "Неофициальный форк upstream OptiScaler (тот же круг контрибьюторов, что и в "
             "официальном проекте). Добавляет DLSS Neural Rendering (DLSS 5 -- реальная технология "
             "NVIDIA, анонсирована на GTC 2026, но официальной интеграции 'в любую игру' NVIDIA не "
             "публикует) поверх DLSS/FSR/XeSS. Без MFG-unlock и без патчинга NVIDIA-кода в памяти.\n"
-            "Требует файл nvngx_dlssnr.dll (~165 МБ) -- в архиве его НЕТ, автор прямо пишет, что "
-            "распространять его не будет (это файл NVIDIA). Это приложение никогда не будет само "
-            "его скачивать откуда-либо -- добавить его в папку игры нужно вручную.\n"
+            "Требует файл nvngx_dlssnr.dll (~165 МБ) -- в архиве его НЕТ. Это приложение никогда не "
+            "будет само его скачивать откуда-либо, но если он уже есть в твоей локальной "
+            "библиотеке (добавлен вручную), при установке он скопируется в папку игры, если там "
+            "его ещё нет.\n"
             "Это база, на которой сделан форк klebermotta-mfg (тот добавляет поверх ещё и MFG-unlock)."
         ),
     ),
@@ -66,6 +69,7 @@ SOURCES: dict[str, Source] = {
         key="klebermotta-mfg",
         repo="KleberMotta/OptiScaler-DLSS5-MFG-RTX40",
         label="OptiScaler + Neural Rendering + MFG unlock RTX40 (эксперимент, сторонний форк)",
+        supports_neural_rendering=True,
         note=(
             "Неофициальный форк форка Dagherbou/OptiScaler_DLSSNR (см. выше), добавляет ещё один "
             "кусок:\n"
@@ -74,7 +78,7 @@ SOURCES: dict[str, Source] = {
             "NVIDIA внутри процесса игры, риск бана.\n"
             "Neural Rendering здесь работает так же, как в dagherbou-dlssnr: требует nvngx_dlssnr.dll "
             "(~165 МБ), которого в архиве нет и который это приложение никогда не будет само "
-            "скачивать откуда-либо -- нужно добавить его в папку игры самостоятельно.\n"
+            "скачивать откуда-либо -- но подставит из локальной библиотеки, если он там уже есть.\n"
             "Проверено автором лично на одной игре, поддерживается одним человеком."
         ),
     ),

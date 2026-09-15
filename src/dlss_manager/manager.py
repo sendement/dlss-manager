@@ -12,11 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import library, optiscaler, paths
+from .components import KEY_TO_COMPONENT
 from .db import Database
 from .hashutil import sha256_file
 from .optiscaler import InstallResult as OptiScalerInstallResult
 from .optiscaler import ReleaseInfo
-from .pe_version import read_pe_version
+from .pe_version import read_pe_version, version_sort_key
 from .scanner import find_component_dlls, inspect_dll
 from .steam import SteamGame, list_installed_games
 
@@ -331,6 +332,24 @@ class Manager:
                 staging, target_dir, proxy_filename, overwrite_conflict=overwrite_conflict or bool(superseded)
             )
 
+        # Neural Rendering forks need nvngx_dlssnr.dll, which NVIDIA doesn't let
+        # anyone redistribute (see Source.note) -- this app never downloads it,
+        # but if the user already imported their own copy into the library (scan
+        # of a game that ships it, or manual drag-and-drop), reuse it here rather
+        # than leaving the game without it when it doesn't already have one.
+        tracked_files = list(result.installed_files)
+        source = optiscaler.SOURCES.get(release.source_key)
+        if source and source.supports_neural_rendering:
+            neural_filename = KEY_TO_COMPONENT["neural_rendering"].filename
+            neural_dest = result.target_dir / neural_filename
+            if not neural_dest.is_file():
+                lib_rows = self.db.library_files(component_key="neural_rendering")
+                if lib_rows:
+                    best = max(lib_rows, key=lambda r: version_sort_key(r["version"] or "0"))
+                    shutil.copy2(library.entry_path(best), neural_dest)
+                    tracked_files.append(neural_filename)
+                    result.installed_files[:] = tracked_files  # keep result truthful too
+
         now = _now()
         for row in superseded:
             self.db.mark_optiscaler_removed(row["id"], now)
@@ -349,7 +368,7 @@ class Manager:
             proxy_filename=result.proxy_filename,
             source_key=release.source_key,
             version=release.tag,
-            installed_files=json.dumps(result.installed_files),
+            installed_files=json.dumps(tracked_files),
             conflict_backup_path=conflict_backup_path,
             installed_at=now,
         )
