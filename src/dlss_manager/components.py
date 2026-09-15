@@ -22,6 +22,7 @@ COMPONENTS: list[Component] = [
     Component("super_resolution", "nvngx_dlss.dll", "DLSS Super Resolution"),
     Component("frame_generation", "nvngx_dlssg.dll", "DLSS Frame Generation"),
     Component("ray_reconstruction", "nvngx_dlssd.dll", "DLSS Ray Reconstruction"),
+    Component("neural_rendering", "nvngx_dlssnr.dll", "DLSS Neural Rendering (DLSS 5)"),
 ]
 
 FILENAME_TO_COMPONENT: dict[str, Component] = {c.filename.lower(): c for c in COMPONENTS}
