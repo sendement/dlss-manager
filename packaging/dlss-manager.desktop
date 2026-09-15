@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=DLSS Manager
+GenericName=DLSS DLL Manager
+Comment=Scan Steam games, manage DLSS DLL versions, and install OptiScaler
+Exec=dlss-manager gui
+Icon=dlss-manager
+Terminal=false
+Categories=Game;Utility;
+StartupNotify=true
+Keywords=DLSS;NVIDIA;OptiScaler;Steam;Upscaling;FSR;

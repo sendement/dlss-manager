@@ -19,6 +19,8 @@ sudo pacman -U dlss-manager-*.pkg.tar.zst   # из GitHub Releases
 cd packaging/arch && makepkg -si
 ```
 
+Ставит и `.desktop`-файл с иконкой — приложение появится в меню как «DLSS Manager».
+
 **Из исходников (любая платформа, через uv):**
 
 ```bash

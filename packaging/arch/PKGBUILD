@@ -1,6 +1,6 @@
 # Maintainer: Sendem <18467008+sendement@users.noreply.github.com>
 pkgname=dlss-manager
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc="Scan Steam games, manage DLSS DLL versions, and install OptiScaler -- CLI + PySide6 GUI"
 arch=('any')
@@ -21,4 +21,8 @@ package() {
     python -m installer --destdir="$pkgdir" dist/*.whl
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 packaging/dlss-manager.desktop \
+        "$pkgdir/usr/share/applications/dlss-manager.desktop"
+    install -Dm644 packaging/icons/dlss-manager.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/dlss-manager.svg"
 }
