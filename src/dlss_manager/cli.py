@@ -5,6 +5,10 @@ import sys
 from pathlib import Path
 
 from .components import COMPONENTS
+from .dlssg_sm86 import DEFAULT_RUNTIME_BUILD as DLSSG_SM86_DEFAULT_RUNTIME_BUILD
+from .dlssg_sm86 import PROXY_DLL_CHOICES as DLSSG_SM86_PROXY_DLL_CHOICES
+from .dlssg_sm86 import RUNTIME_BUILDS as DLSSG_SM86_RUNTIME_BUILDS
+from .dlssg_sm86 import DlssgSm86Error
 from .library import UnknownComponentError
 from .manager import Manager
 from .optiscaler import PROXY_DLL_CHOICES, ExtractionError, OptiScalerError
@@ -281,6 +285,112 @@ def cmd_optiscaler_rollback(args, m: Manager) -> None:
         print(f"  also removed: {p}")
 
 
+def cmd_dlssg_sm86_releases(args, m: Manager) -> None:
+    try:
+        releases = m.dlssg_sm86_releases(limit=args.limit)
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    _print_table(
+        [[r.tag, r.published_at or "?", "pre" if r.prerelease else ""] for r in releases],
+        ["tag", "published_at", ""],
+    )
+
+
+def cmd_dlssg_sm86_targets(args, m: Manager) -> None:
+    try:
+        targets = m.suggest_dlssg_sm86_targets(args.app_id)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not targets:
+        print("No candidate folders found (no .exe under the install dir?).")
+        return
+    for i, t in enumerate(targets):
+        print(f"[{i}] {t}")
+
+
+def _find_dlssg_sm86_release(m: Manager, tag: str | None):
+    if tag is None:
+        return m.latest_dlssg_sm86_release()
+    for r in m.dlssg_sm86_releases(limit=30):
+        if r.tag == tag:
+            return r
+    print(f"error: release {tag!r} not found in the last 30 releases", file=sys.stderr)
+    sys.exit(1)
+
+
+def cmd_dlssg_sm86_install(args, m: Manager) -> None:
+    try:
+        release = _find_dlssg_sm86_release(m, args.version)
+        target_dir = Path(args.target) if args.target else m.suggest_dlssg_sm86_targets(args.app_id)[0]
+        result = m.install_dlssg_sm86(
+            args.app_id,
+            target_dir,
+            proxy_filename=args.proxy,
+            runtime_build=args.runtime,
+            release=release,
+            overwrite_conflict=args.overwrite,
+        )
+    except (ValueError, FileExistsError, DlssgSm86Error, IndexError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(
+        f"Installed dlssg_for_sm86 {release.tag} (runtime {result.runtime_build}) -> "
+        f"{result.target_dir} as {result.proxy_filename}"
+    )
+    if result.conflict_backup_path:
+        print(f"(existing {result.proxy_filename} backed up to {result.conflict_backup_path})")
+
+
+def cmd_dlssg_sm86_list(args, m: Manager) -> None:
+    rows = m.db.active_dlssg_sm86_installs()
+    if not rows:
+        print("No active dlssg_for_sm86 installs.")
+        return
+    _print_table(
+        [
+            [r["id"], r["game_name"], r["version"], r["runtime_build"], r["proxy_filename"], r["target_dir"]]
+            for r in rows
+        ],
+        ["id", "game", "version", "runtime", "proxy", "target_dir"],
+    )
+
+
+def cmd_dlssg_sm86_check(args, m: Manager) -> None:
+    try:
+        updates = m.check_dlssg_sm86_updates()
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not updates:
+        print("All dlssg_for_sm86 installs are up to date.")
+        return
+    _print_table(
+        [[row["id"], row["game_name"], row["version"], latest.tag] for row, latest in updates],
+        ["id", "game", "installed", "latest"],
+    )
+
+
+def cmd_dlssg_sm86_update(args, m: Manager) -> None:
+    try:
+        release = _find_dlssg_sm86_release(m, args.version) if args.version else None
+        result = m.update_dlssg_sm86(args.install_id, release=release)
+    except (ValueError, DlssgSm86Error) as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Updated -> {result.target_dir}")
+
+
+def cmd_dlssg_sm86_uninstall(args, m: Manager) -> None:
+    try:
+        m.uninstall_dlssg_sm86(args.install_id)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Uninstalled dlssg_for_sm86 install #{args.install_id}.")
+
+
 def cmd_gui(args, m: Manager) -> None:
     m.close()
     from .gui.app import run_gui
@@ -377,6 +487,40 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument("install_id", type=int)
     s.set_defaults(func=cmd_optiscaler_rollback)
+
+    s = sub.add_parser(
+        "dlssg-sm86-releases", help="list dlssg_for_sm86 releases (DLSS-G unlock for RTX 20/30)"
+    )
+    s.add_argument("--limit", type=int, default=15)
+    s.set_defaults(func=cmd_dlssg_sm86_releases)
+
+    s = sub.add_parser("dlssg-sm86-targets", help="suggest install folders for a game")
+    s.add_argument("app_id")
+    s.set_defaults(func=cmd_dlssg_sm86_targets)
+
+    s = sub.add_parser("dlssg-sm86-install", help="download and install dlssg_for_sm86 into a game")
+    s.add_argument("app_id")
+    s.add_argument("--target", default=None, help="folder to install into (default: best guess)")
+    s.add_argument("--proxy", choices=DLSSG_SM86_PROXY_DLL_CHOICES, default="version.dll")
+    s.add_argument("--runtime", choices=list(DLSSG_SM86_RUNTIME_BUILDS), default=DLSSG_SM86_DEFAULT_RUNTIME_BUILD)
+    s.add_argument("--version", default=None, help="release tag (default: latest)")
+    s.add_argument("--overwrite", action="store_true", help="overwrite an existing file with the same proxy name")
+    s.set_defaults(func=cmd_dlssg_sm86_install)
+
+    s = sub.add_parser("dlssg-sm86-list", help="list active dlssg_for_sm86 installs")
+    s.set_defaults(func=cmd_dlssg_sm86_list)
+
+    s = sub.add_parser("dlssg-sm86-check", help="check installed dlssg_for_sm86 versions against the latest release")
+    s.set_defaults(func=cmd_dlssg_sm86_check)
+
+    s = sub.add_parser("dlssg-sm86-update", help="update an install to a release (default: latest)")
+    s.add_argument("install_id", type=int)
+    s.add_argument("--version", default=None)
+    s.set_defaults(func=cmd_dlssg_sm86_update)
+
+    s = sub.add_parser("dlssg-sm86-uninstall", help="remove a dlssg_for_sm86 install")
+    s.add_argument("install_id", type=int)
+    s.set_defaults(func=cmd_dlssg_sm86_uninstall)
 
     s = sub.add_parser("gui", help="launch the graphical interface")
     s.set_defaults(func=cmd_gui)

@@ -50,6 +50,14 @@ uv run dlss-manager optiscaler-list                        # активные у
 uv run dlss-manager optiscaler-check                       # сверить версии с последним релизом (на каждый source свой)
 uv run dlss-manager optiscaler-update <install_id>
 uv run dlss-manager optiscaler-uninstall <install_id>
+
+uv run dlss-manager dlssg-sm86-releases                   # релизы sdli1995/dlssg_for_sm86
+uv run dlss-manager dlssg-sm86-targets <app_id>
+uv run dlss-manager dlssg-sm86-install <app_id> [--target PATH] [--proxy version.dll] [--runtime 310.9] [--version TAG]
+uv run dlss-manager dlssg-sm86-list
+uv run dlss-manager dlssg-sm86-check
+uv run dlss-manager dlssg-sm86-update <install_id>
+uv run dlss-manager dlssg-sm86-uninstall <install_id>
 ```
 
 ### Источники OptiScaler
@@ -80,6 +88,19 @@ faisalkindi/DLSS5oneclick) — все три created за последние 2-3
 раздают только готовые .exe без исходников, у одного README прямо учит
 обходить предупреждение SmartScreen. Похоже на скам/малварь-кампанию вокруг
 хайпа "DLSS 5" — не запускать.
+
+### dlssg_for_sm86 (DLSS Frame Generation для RTX 20/30)
+
+[sdli1995/dlssg_for_sm86](https://github.com/sdli1995/dlssg_for_sm86) — отдельный
+от OptiScaler инструмент, не форк. Разблокирует DLSS-G на RTX 20/30 (SM75/SM86)
+через proxy-DLL вокруг немодифицированного рантайма NVIDIA. Аккаунт автора
+с 2017 года, релизные DLL подписаны (self-signed, отпечаток указан в README
+проекта), но, в отличие от OptiScaler, GitHub не публикует хэш для скачанного
+архива — слабее по проверяемости. Не использовать в мультиплеере — риск бана.
+
+Ставится так же, как OptiScaler (proxy DLL + ini рядом с исполняемым файлом
+игры), но с двумя рантаймами на выбор (310.9 — до 6X, 310.1 — до 4X) и своим
+набором имён прокси (`version.dll` по умолчанию, либо d3d12/dbghelp/dinput8/dxgi/winmm).
 
 ## GUI
 
@@ -114,3 +135,7 @@ uv run dlss-manager gui
   (переименование `OptiScaler.dll` в выбранный proxy-DLL). Установка/обновление/
   удаление отслеживаются в своей таблице БД — свой манифест вместо их bash-анинсталлера,
   чтобы это укладывалось в общую историю изменений приложения.
+- `dlssg_sm86.py` — аналогичная логика для dlssg_for_sm86, но качает не
+  Release-ассет, а автогенерируемый GitHub-архив исходников по тегу (у этого
+  проекта релизы без вложений — файлы лежат прямо в дереве репозитория),
+  поэтому распаковка через `tarfile`, а не системный `7z`.

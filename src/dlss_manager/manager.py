@@ -11,9 +11,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import library, optiscaler, paths
+from . import dlssg_sm86, library, optiscaler, paths
 from .components import KEY_TO_COMPONENT
 from .db import Database
+from .dlssg_sm86 import InstallResult as DlssgSm86InstallResult
+from .dlssg_sm86 import ReleaseInfo as DlssgSm86ReleaseInfo
 from .hashutil import sha256_file
 from .optiscaler import InstallResult as OptiScalerInstallResult
 from .optiscaler import ReleaseInfo
@@ -439,3 +441,114 @@ class Manager:
             if row["version"] != latest.tag:
                 pending.append((row, latest))
         return pending
+
+    # -- dlssg_for_sm86 (DLSS Frame Generation unlock for RTX 20/30) ---------
+
+    def dlssg_sm86_releases(self, limit: int = 15) -> list[DlssgSm86ReleaseInfo]:
+        return dlssg_sm86.fetch_releases(limit=limit)
+
+    def latest_dlssg_sm86_release(self) -> DlssgSm86ReleaseInfo:
+        return dlssg_sm86.fetch_latest_release()
+
+    def suggest_dlssg_sm86_targets(self, app_id: str) -> list[Path]:
+        game = self.db.game(app_id)
+        if game is None:
+            raise ValueError(f"unknown game app_id={app_id}")
+        return optiscaler.suggest_install_targets(Path(game["install_dir"]))
+
+    def install_dlssg_sm86(
+        self,
+        app_id: str,
+        target_dir: Path,
+        proxy_filename: str = dlssg_sm86.DEFAULT_PROXY_DLL,
+        runtime_build: str = dlssg_sm86.DEFAULT_RUNTIME_BUILD,
+        release: DlssgSm86ReleaseInfo | None = None,
+        overwrite_conflict: bool = False,
+    ) -> DlssgSm86InstallResult:
+        game = self.db.game(app_id)
+        if game is None:
+            raise ValueError(f"unknown game app_id={app_id}")
+
+        release = release or dlssg_sm86.fetch_latest_release()
+        archive = dlssg_sm86.download_source_tarball(release)
+
+        target_dir_str = str(target_dir)
+        superseded = [
+            r for r in self.db.active_dlssg_sm86_installs(app_id) if r["target_dir"] == target_dir_str
+        ]
+        inherited_conflict_backup = superseded[0]["conflict_backup_path"] if superseded else None
+
+        with tempfile.TemporaryDirectory(prefix="dlssg-sm86-") as tmp:
+            staging = Path(tmp) / "staging"
+            source_root = dlssg_sm86.extract_source(archive, staging)
+            result = dlssg_sm86.install_to(
+                source_root,
+                target_dir,
+                proxy_filename,
+                runtime_build,
+                overwrite_conflict=overwrite_conflict or bool(superseded),
+            )
+
+        now = _now()
+        for row in superseded:
+            self.db.mark_dlssg_sm86_removed(row["id"], now)
+
+        if superseded and result.conflict_backup_path:
+            result.conflict_backup_path.unlink(missing_ok=True)
+            conflict_backup_path = inherited_conflict_backup
+        else:
+            conflict_backup_path = str(result.conflict_backup_path) if result.conflict_backup_path else None
+
+        self.db.record_dlssg_sm86_install(
+            app_id=app_id,
+            game_name=game["name"],
+            target_dir=str(result.target_dir),
+            proxy_filename=result.proxy_filename,
+            runtime_build=result.runtime_build,
+            version=release.tag,
+            installed_files=json.dumps(result.installed_files),
+            conflict_backup_path=conflict_backup_path,
+            installed_at=now,
+        )
+        return result
+
+    def uninstall_dlssg_sm86(self, install_id: int) -> None:
+        row = self.db.dlssg_sm86_install(install_id)
+        if row is None or row["removed_at"] is not None:
+            raise ValueError(f"no active dlssg_sm86 install with id={install_id}")
+        dlssg_sm86.uninstall_from(
+            Path(row["target_dir"]), json.loads(row["installed_files"]), row["conflict_backup_path"]
+        )
+        self.db.mark_dlssg_sm86_removed(install_id, _now())
+
+    def update_dlssg_sm86(
+        self, install_id: int, release: DlssgSm86ReleaseInfo | None = None
+    ) -> DlssgSm86InstallResult:
+        row = self.db.dlssg_sm86_install(install_id)
+        if row is None or row["removed_at"] is not None:
+            raise ValueError(f"no active dlssg_sm86 install with id={install_id}")
+
+        release = release or dlssg_sm86.fetch_latest_release()
+        target_dir = Path(row["target_dir"])
+
+        dlssg_sm86.uninstall_from(target_dir, json.loads(row["installed_files"]), row["conflict_backup_path"])
+        self.db.mark_dlssg_sm86_removed(install_id, _now())
+
+        return self.install_dlssg_sm86(
+            row["app_id"],
+            target_dir,
+            proxy_filename=row["proxy_filename"],
+            runtime_build=row["runtime_build"],
+            release=release,
+            overwrite_conflict=True,
+        )
+
+    def check_dlssg_sm86_updates(self) -> list[tuple]:
+        latest = dlssg_sm86.fetch_latest_release()
+        return [(row, latest) for row in self.db.active_dlssg_sm86_installs() if row["version"] != latest.tag]
+
+    def rollback_dlssg_sm86_to_clean_state(self, install_id: int) -> None:
+        """dlssg_for_sm86 has no runtime-generated log files of its own to
+        sweep (unlike OptiScaler) -- uninstall already leaves the folder
+        clean. Kept as a separate method for a consistent GUI/CLI shape."""
+        self.uninstall_dlssg_sm86(install_id)

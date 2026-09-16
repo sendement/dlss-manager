@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 from ..components import KEY_TO_COMPONENT
 from ..manager import Manager
 from ..pe_version import version_sort_key
+from .dlssg_sm86_tab import DlssgSm86Tab
 from .library_tab import LibraryTab
 from .optiscaler_tab import OptiScalerTab
 
@@ -58,6 +59,9 @@ class MainWindow(QMainWindow):
 
         self.optiscaler_tab = OptiScalerTab(self.manager, status_cb)
         self.tabs.addTab(self.optiscaler_tab, "OptiScaler")
+
+        self.dlssg_sm86_tab = DlssgSm86Tab(self.manager, status_cb)
+        self.tabs.addTab(self.dlssg_sm86_tab, "DLSS-G unlock")
 
         self.statusBar().showMessage("Готово")
 
@@ -140,6 +144,8 @@ class MainWindow(QMainWindow):
             self.library_tab.refresh()
         if hasattr(self, "optiscaler_tab"):
             self.optiscaler_tab.refresh()
+        if hasattr(self, "dlssg_sm86_tab"):
+            self.dlssg_sm86_tab.refresh()
 
     def _refresh_games_table(self) -> None:
         table = self.games_table
