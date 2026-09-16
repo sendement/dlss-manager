@@ -37,6 +37,11 @@ class Source:
     label: str
     note: str = ""
     supports_neural_rendering: bool = False
+    # Some repos publish more than one archive per release (e.g. a plain
+    # build and a "-rtx40-mfg" variant); any asset whose filename contains
+    # one of these substrings (case-insensitive) is skipped when picking
+    # which one to download.
+    asset_exclude_substrings: tuple[str, ...] = ()
 
 
 # Known places to get an OptiScaler build from. "official" is the upstream
@@ -80,6 +85,24 @@ SOURCES: dict[str, Source] = {
             "(~165 МБ), которого в архиве нет и который это приложение никогда не будет само "
             "скачивать откуда-либо -- но подставит из локальной библиотеки, если он там уже есть.\n"
             "Проверено автором лично на одной игре, поддерживается одним человеком."
+        ),
+    ),
+    "wilsjo2-nr": Source(
+        key="wilsjo2-nr",
+        repo="wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass",
+        label="OptiScaler + Neural Rendering (RTX 20/30/40/50, сторонний форк, без MFG-unlock)",
+        supports_neural_rendering=True,
+        asset_exclude_substrings=("mfg",),
+        note=(
+            "Неофициальный форк Dagherbou/OptiScaler_DLSSNR (в контрибьюторах -- тот же костяк "
+            "официального OptiScaler, плюс сам Dagherbou). В отличие от dagherbou-dlssnr, поддерживает "
+            "Neural Rendering не только на RTX 50, а на RTX 20/30/40/50 -- через технику 'pre-SR "
+            "multipass'. Каждый релизный архив сопровождается отдельным .sha256 от автора (лучше "
+            "проверяемость, чем у dagherbou-dlssnr/klebermotta-mfg, у которых есть только хэш из "
+            "GitHub API). Без MFG-unlock и без патчинга NVIDIA-кода в памяти.\n"
+            "Требует файл nvngx_dlssnr.dll (~165 МБ, версия зависит от поколения GPU) -- в архиве его "
+            "НЕТ. Это приложение никогда не будет само его скачивать откуда-либо, но подставит из "
+            "локальной библиотеки, если он там уже есть."
         ),
     ),
 }
@@ -144,9 +167,18 @@ def _resolve_source(source_key: str) -> Source:
 
 def _parse_release(data: dict, source_key: str) -> ReleaseInfo:
     assets = data.get("assets", [])
-    archive_asset = next((a for a in assets if a["name"].lower().endswith((".7z", ".zip"))), None)
+    exclude = SOURCES[source_key].asset_exclude_substrings if source_key in SOURCES else ()
+    archive_asset = next(
+        (
+            a
+            for a in assets
+            if a["name"].lower().endswith((".7z", ".zip"))
+            and not any(bad in a["name"].lower() for bad in exclude)
+        ),
+        None,
+    )
     if archive_asset is None:
-        raise OptiScalerError(f"release {data.get('tag_name')} has no .7z/.zip asset")
+        raise OptiScalerError(f"release {data.get('tag_name')} has no matching .7z/.zip asset")
     digest = archive_asset.get("digest") or ""
     sha256 = digest.split(":", 1)[1] if digest.startswith("sha256:") else None
     return ReleaseInfo(
