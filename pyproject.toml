@@ -1,6 +1,6 @@
 [project]
 name = "dlss-manager"
-version = "0.3.0"
+version = "0.3.1"
 description = "Scan Steam games, manage DLSS DLL versions, and install OptiScaler / dlssg_for_sm86 -- CLI and PySide6 GUI"
 readme = "README.md"
 license = "MIT"
