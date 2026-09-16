@@ -1,6 +1,6 @@
 pkgbase = dlss-manager
-	pkgdesc = Scan Steam games, manage DLSS DLL versions, and install OptiScaler -- CLI + PySide6 GUI
-	pkgver = 0.2.1
+	pkgdesc = Scan Steam games, manage DLSS DLL versions, and install OptiScaler / dlssg_for_sm86 -- CLI + PySide6 GUI
+	pkgver = 0.3.0
 	pkgrel = 1
 	url = https://github.com/sendement/dlss-manager
 	arch = any
@@ -15,7 +15,7 @@ pkgbase = dlss-manager
 	depends = pyside6
 	depends = python-requests
 	depends = 7zip
-	source = dlss-manager-0.2.1.tar.gz::https://github.com/sendement/dlss-manager/archive/refs/tags/v0.2.1.tar.gz
-	sha256sums = 68c7c42b4359899820549f305d69cab7f5c4e0ac790bcbe0aa2841096de8e6b4
+	source = dlss-manager-0.3.0.tar.gz::https://github.com/sendement/dlss-manager/archive/refs/tags/v0.3.0.tar.gz
+	sha256sums = 1b05ce912501aafa49001e7bb5b26f00908c9798b9dcc63982591e664c7a8569
 
 pkgname = dlss-manager

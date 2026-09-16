@@ -1,15 +1,15 @@
 # Maintainer: Sendem <18467008+sendement@users.noreply.github.com>
 pkgname=dlss-manager
-pkgver=0.2.1
+pkgver=0.3.0
 pkgrel=1
-pkgdesc="Scan Steam games, manage DLSS DLL versions, and install OptiScaler -- CLI + PySide6 GUI"
+pkgdesc="Scan Steam games, manage DLSS DLL versions, and install OptiScaler / dlssg_for_sm86 -- CLI + PySide6 GUI"
 arch=('any')
 url="https://github.com/sendement/dlss-manager"
 license=('MIT')
 depends=('python' 'python-pefile' 'python-platformdirs' 'pyside6' 'python-requests' '7zip')
 makedepends=('python-build' 'python-installer' 'python-wheel' 'python-uv-build')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/sendement/dlss-manager/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('68c7c42b4359899820549f305d69cab7f5c4e0ac790bcbe0aa2841096de8e6b4')
+sha256sums=('1b05ce912501aafa49001e7bb5b26f00908c9798b9dcc63982591e664c7a8569')
 
 build() {
     cd "$pkgname-$pkgver"
