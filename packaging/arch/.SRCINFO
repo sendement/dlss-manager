@@ -16,6 +16,6 @@ pkgbase = dlss-manager
 	depends = python-requests
 	depends = 7zip
 	source = dlss-manager-0.3.3.tar.gz::https://github.com/sendement/dlss-manager/archive/refs/tags/v0.3.3.tar.gz
-	sha256sums = a71ab58a08c6b1708686869a1ce10a4537251d714f26c5d1054c384ea774800b
+	sha256sums = b04c29d33c0cc7dda4354b9dfbd111797240bee72a29a14a2c6291ef37a5ff78
 
 pkgname = dlss-manager
