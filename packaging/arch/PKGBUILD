@@ -1,0 +1,28 @@
+# Maintainer: Sendem <18467008+sendement@users.noreply.github.com>
+pkgname=dlss-manager
+pkgver=0.3.3
+pkgrel=1
+pkgdesc="Scan Steam games, manage DLSS DLL versions, and install OptiScaler / dlssg_for_sm86 -- CLI + PySide6 GUI"
+arch=('any')
+url="https://github.com/sendement/dlss-manager"
+license=('MIT')
+depends=('python' 'python-pefile' 'python-platformdirs' 'pyside6' 'python-requests' '7zip')
+makedepends=('python-build' 'python-installer' 'python-wheel' 'python-uv-build')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/sendement/dlss-manager/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('a71ab58a08c6b1708686869a1ce10a4537251d714f26c5d1054c384ea774800b')
+
+build() {
+    cd "$pkgname-$pkgver"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    python -m installer --destdir="$pkgdir" dist/*.whl
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 packaging/dlss-manager.desktop \
+        "$pkgdir/usr/share/applications/dlss-manager.desktop"
+    install -Dm644 packaging/icons/dlss-manager.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/dlss-manager.svg"
+}
